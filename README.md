@@ -27,6 +27,7 @@ into `Data/steo_archive/`; later runs only fetch the newest release.
 | `fall_eos_vs_hh_<asof>_clean.png`, `spring_…_clean.png` | Same frame, ticks only, for Adobe Express |
 | `eos_desk_<asof>_reference.png` / `_clean.png` | The original six-panel landscape page |
 | `eos_steo_<asof>.html` (+ `eos_steo_latest.html`, `.json`) | Interactive page: scatter with STEO vintages, season timeline, vintage table |
+| `eos_survey_boxes_<asof>.pdf` / `.png` | The two survey summary boxes (average, median, range, count, respondent bars), 7.5 × 2.0 in |
 | `eos_desk_page_<asof>.pdf` | Full-page mock-up of page 4, reference only |
 
 Titles on the presentation scatters default to neutral text; pass `--fall-title` / `--spring-title`
@@ -64,9 +65,16 @@ to `run_all.py` for a headline.
 
 Set `MR_HOME=/some/folder` to use a different project root than the repo folder.
 
-## Not in the workbook
+## Survey boxes (median, range, count, respondent bars)
 
-The survey boxes at the top of The Desk's page (median, range, number of estimates and the
-per-respondent bars) need the individual survey responses, which the workbook does not contain, so the
-full-page mock-up leaves those rows blank. Add a sheet with one row per respondent per week and they
-can be wired in.
+These need the individual survey responses, which the EOS workbook does not contain. The scripts read
+two small files in `Data/` and fall back to average-only boxes when they are absent:
+
+- `eos_survey_responses.csv` — one row per estimate: `survey_date, season, estimate_bcf` (names not needed)
+- `eos_survey_summary.csv` — one row per week when only the summary is known:
+  `survey_date, season, average, median, low, high, n_estimates`
+
+The sample rows are transcribed from John's 9 Nov 2026 email (20 estimates, average 3,906, median 3,901,
+range 3,876–3,945) and reproduce his figures exactly. Going forward the file should come from the survey
+sheet itself, not from a screenshot. Output: `eos_survey_boxes_<asof>.pdf` (7.5 × 2.0 in, both seasons)
+for placing above the chart block, and the boxes on the full-page mock-up.

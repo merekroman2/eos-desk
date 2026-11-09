@@ -127,32 +127,107 @@ def scatter(ax, w, st, kind, trend, latest_label):
               edgecolor="#D9D9D9", bbox_to_anchor=(0.5, 1.17), handletextpad=0.1, columnspacing=0.6)
 
 
-def survey_box(fig, x, y, wd, ht, w, kind, season, asof):
+def survey_stats(season: str, home: Path) -> list[dict]:
+    """Per-week survey statistics for a season, newest first.
+
+    Data/eos_survey_responses.csv  one row per respondent estimate (survey_date, season, estimate_bcf)
+    Data/eos_survey_summary.csv    one row per week when only the summary is known
+                                   (survey_date, season, average, median, low, high, n_estimates)
+    Respondent-level rows win where both exist. Returns [] if neither file has the season.
+    """
+    out = {}
+    f = home / "Data" / "eos_survey_summary.csv"
+    if f.exists():
+        t = pd.read_csv(f, parse_dates=["survey_date"])
+        for _, r in t[t["season"] == season].iterrows():
+            out[r["survey_date"]] = dict(date=r["survey_date"], avg=r["average"], med=r["median"],
+                                         lo=r["low"], hi=r["high"], n=int(r["n_estimates"]), values=None)
+    f = home / "Data" / "eos_survey_responses.csv"
+    if f.exists():
+        t = pd.read_csv(f, parse_dates=["survey_date"])
+        for d, g in t[t["season"] == season].groupby("survey_date"):
+            v = g["estimate_bcf"].astype(float).sort_values(ascending=False)
+            out[d] = dict(date=d, avg=v.mean(), med=v.median(), lo=v.min(), hi=v.max(), n=len(v),
+                          values=v.to_numpy())
+    return [out[k] for k in sorted(out, reverse=True)]
+
+
+def survey_box(fig, x, y, wd, ht, w, kind, season, asof, home=HOME):
+    """Survey summary box in John's layout. x, y, wd, ht are figure fractions; the internal
+    layout is in inches so the box renders the same on the page and as a standalone export."""
     key = kind.lower()
+    fw, fh = fig.get_size_inches()
+    ix, iy = lambda v: v / fw, lambda v: v / fh          # inches -> figure fraction
+    stats = survey_stats(season, home)
     g = w[(w[key + "_season"] == season) & w[key].notna()].sort_values("date")
-    cur, prev = g.iloc[-1], g.iloc[-2]
-    fig.patches.append(Rectangle((x, y), wd, ht, transform=fig.transFigure, fc="white", ec=NAVY, lw=1))
-    fig.patches.append(Rectangle((x, y + ht - 0.018), wd, 0.018, transform=fig.transFigure, fc=NAVY, ec="none"))
-    fig.text(x + wd / 2, y + ht - 0.009, f"EOS Weekly NG Storage Survey for {season}", color="white",
+    fig.patches.append(Rectangle((x, y), wd, ht, transform=fig.transFigure, fc="white", ec=NAVY, lw=1, zorder=-2))
+    fig.patches.append(Rectangle((x, y + ht - iy(0.2)), wd, iy(0.2), transform=fig.transFigure, fc=NAVY, ec="none", zorder=-1))
+    fig.text(x + wd / 2, y + ht - iy(0.1), f"EOS Weekly NG Storage Survey for {season}", color="white",
              fontsize=8.5, fontweight="bold", ha="center", va="center")
-    c1, c2, c3, c4 = x + 0.03, x + 0.20, x + 0.30, x + 0.39
-    r0 = y + ht - 0.038
-    fig.text(c2, r0, cur["date"].strftime("%-d-%b"), color=RED, fontsize=7, fontweight="bold", ha="center")
-    fig.text(c4, r0, prev["date"].strftime("%-d-%b"), color=RED, fontsize=7, fontweight="bold", ha="center")
-    fig.text(c2, r0 - 0.012, "Current Week", fontsize=6.5, fontweight="bold", ha="center")
-    fig.text(c4, r0 - 0.012, "Last Week", fontsize=6.5, fontweight="bold", ha="center")
-    rows = [("Average", f"{cur[key]:,.0f}", "Bcf", f"{prev[key]:,.0f}"),
-            ("Median", "—", "Bcf", "—"),
-            ("Range", "—", "Bcf", "—"),
-            ("No. of Estimates", "—", "", "—")]
-    for i, (lab, a, u, b) in enumerate(rows):
-        yy = r0 - 0.027 - i * 0.012
+    c1, c2, c3, c4 = x + ix(0.15), x + wd * 0.45, x + wd * 0.65, x + wd * 0.85
+    r0 = y + ht - iy(0.42)
+    step = iy(0.13)
+    dash = "\u2014"
+
+    def fmt(v):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return dash
+        return f"{int(np.floor(v + 0.5)):,}"      # half-up, as in John's sheet (3,900.5 -> 3,901)
+
+    cur = None
+    if len(stats) >= 1:            # survey responses present: John's full layout
+        cur = stats[0]
+        prev = stats[1] if len(stats) > 1 else None
+        cur_lab = cur["date"].strftime("%-d-%b")
+        prev_lab = prev["date"].strftime("%-d-%b") if prev else dash
+        rows = [("Average", fmt(cur["avg"]), "Bcf", fmt(prev["avg"]) if prev else dash),
+                ("Median", fmt(cur["med"]), "Bcf", fmt(prev["med"]) if prev else dash),
+                ("Range", f"{cur['lo']:.0f} to {cur['hi']:.0f}", "Bcf",
+                 f"{prev['lo']:.0f} to {prev['hi']:.0f}" if prev else dash),
+                ("No. of Estimates", str(cur["n"]), "", str(prev["n"]) if prev else dash)]
+        note = f"Survey responses: {cur['n']} estimates, {cur_lab}."
+    else:                          # workbook only: average, everything else blank
+        cur_w, prev_w = g.iloc[-1], g.iloc[-2]
+        cur_lab, prev_lab = cur_w["date"].strftime("%-d-%b"), prev_w["date"].strftime("%-d-%b")
+        rows = [("Average", fmt(cur_w[key]), "Bcf", fmt(prev_w[key])),
+                ("Median", dash, "Bcf", dash), ("Range", dash, "Bcf", dash), ("No. of Estimates", dash, "", dash)]
+        note = "Median, range and respondent bars need the survey responses (not in the workbook)."
+    fig.text(c2, r0, cur_lab, color=RED, fontsize=7, fontweight="bold", ha="center")
+    fig.text(c4, r0, prev_lab, color=RED, fontsize=7, fontweight="bold", ha="center")
+    fig.text(c2, r0 - step, "Current Week", fontsize=6.5, fontweight="bold", ha="center")
+    fig.text(c4, r0 - step, "Last Week", fontsize=6.5, fontweight="bold", ha="center")
+    for i, (lab, a_, u, b_) in enumerate(rows):
+        yy = r0 - step * (2.2 + i)
         fig.text(c1, yy, lab, fontsize=6.5, fontweight="bold" if lab != "Range" else "normal")
-        fig.text(c2, yy, a, fontsize=6.5, fontweight="bold", ha="center")
+        fig.text(c2, yy, a_, fontsize=6.5, fontweight="bold", ha="center")
         fig.text(c3, yy, u, fontsize=6.5, fontweight="bold", ha="center")
-        fig.text(c4, yy, b, fontsize=6.5, ha="center")
-    fig.text(x + wd / 2, y + 0.008, "Median, range and respondent bars come from the survey file (not in the workbook).",
-             fontsize=5.3, color=GREY, ha="center", style="italic")
+        fig.text(c4, yy, b_, fontsize=6.5, ha="center")
+
+    # respondent bar strip: one bar per estimate, descending, dotted average (John's layout)
+    if cur is not None and cur["values"] is not None:
+        top = r0 - step * 6.6
+        bottom = y + iy(0.22)
+        if top - bottom > iy(0.25):
+            ax = fig.add_axes([x + ix(0.35), bottom, wd - ix(0.5), top - bottom])
+            v = cur["values"]
+            lo = np.floor((v.min() - 150) / 200) * 200
+            hi = np.ceil((v.max() + 150) / 200) * 200
+            ax.bar(range(len(v)), v - lo, bottom=lo, color="#A9D18E", width=0.8)
+            ax.axhline(cur["avg"], color=RED, ls=(0, (1, 2)), lw=1)
+            ax.text(len(v) + 0.2, cur["avg"], f"{fmt(cur['avg'])}", color=DARK, fontsize=5.5, va="bottom")
+            for i, val in enumerate(v):
+                ax.text(i, lo + 0.06 * (hi - lo), f"{val:,.0f}", rotation=90, fontsize=3.8, ha="center",
+                        va="bottom", color=DARK)
+            ax.set_xlim(-0.6, len(v) + 3)
+            ax.set_ylim(lo, hi)
+            ax.set_xticks([])
+            ax.tick_params(axis="y", labelsize=4.5, length=0, colors=GREY)
+            ax.yaxis.set_major_formatter(FuncFormatter(lambda v_, _: f"{v_:,.0f}"))
+            ax.grid(axis="y", color="#E5E5E5", lw=0.5)
+            ax.set_axisbelow(True)
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+    fig.text(x + wd / 2, y + iy(0.06), note, fontsize=4.8, color=GREY, ha="center", style="italic")
 
 
 def build(d: dict, out: Path) -> list[Path]:
@@ -172,14 +247,14 @@ def build(d: dict, out: Path) -> list[Path]:
     fig.text(0.50, 0.92, "Nat Gas EOS Surveys +", fontsize=22, color="white", ha="center", va="center",
              fontfamily="monospace")
     # survey boxes
-    survey_box(fig, 0.06, 0.74, 0.43, 0.13, w, "Fall", fall, asof)
-    survey_box(fig, 0.51, 0.74, 0.43, 0.13, w, "Spring", spring, asof)
+    survey_box(fig, 0.06, 0.69, 0.43, 0.185, w, "Fall", fall, asof)
+    survey_box(fig, 0.51, 0.69, 0.43, 0.185, w, "Spring", spring, asof)
     # banners
     for x, txt, c in ((0.06, fall.upper(), ORANGE), (0.51, spring.upper(), GREEN)):
-        fig.patches.append(Rectangle((x, 0.712), 0.43, 0.016, transform=fig.transFigure, fc=c, ec="none"))
-        fig.text(x + 0.215, 0.720, txt, color="white", fontsize=9, fontweight="bold", va="center", ha="center")
+        fig.patches.append(Rectangle((x, 0.664), 0.43, 0.016, transform=fig.transFigure, fc=c, ec="none"))
+        fig.text(x + 0.215, 0.672, txt, color="white", fontsize=9, fontweight="bold", va="center", ha="center")
 
-    gs = fig.add_gridspec(3, 2, left=0.10, right=0.92, top=0.685, bottom=0.055, hspace=0.62, wspace=0.42,
+    gs = fig.add_gridspec(3, 2, left=0.10, right=0.92, top=0.64, bottom=0.062, hspace=0.62, wspace=0.42,
                           height_ratios=[1, 1, 1.25])
     bars(fig.add_subplot(gs[0, 0]), w, "Fall", "spot", fall, fy)
     bars(fig.add_subplot(gs[0, 1]), w, "Spring", "spot", spring, fy)
@@ -188,7 +263,7 @@ def build(d: dict, out: Path) -> list[Path]:
     scatter(fig.add_subplot(gs[2, 0]), w, st, "Fall", d["trend"]["Fall"], d["latest_label"])
     scatter(fig.add_subplot(gs[2, 1]), w, st, "Spring", d["trend"]["Spring"], d["latest_label"])
 
-    fig.text(0.06, 0.018, "Prices: Yahoo NG=F front-month and EIA Henry Hub spot, Mon–Fri weekly averages. "
+    fig.text(0.06, 0.012, "Prices: Yahoo NG=F front-month and EIA Henry Hub spot, Mon–Fri weekly averages. "
              "Triangles: EIA STEO end-of-season working gas (Lower 48), one per monthly release, priced at release week.",
              fontsize=5.5, color=GREY)
 
@@ -239,6 +314,23 @@ def build_block(d: dict, out: Path, which: str = "both") -> list[Path]:
     return paths
 
 
+def build_survey_boxes(d: dict, out: Path) -> list[Path]:
+    """The two survey boxes alone (7.5 x 1.9 in), for placing above the chart block."""
+    w = pd.DataFrame(d["weekly"])
+    w["date"] = pd.to_datetime(w["date"])
+    fy = d["fall_year"]
+    fig = plt.figure(figsize=(7.5, 2.0), facecolor="white")
+    survey_box(fig, 0.01, 0.02, 0.48, 0.96, w, "Fall", f"Fall {fy}", pd.Timestamp(d["asof"]))
+    survey_box(fig, 0.51, 0.02, 0.48, 0.96, w, "Spring", f"Spring {fy + 1}", pd.Timestamp(d["asof"]))
+    out.mkdir(parents=True, exist_ok=True)
+    tag = d["asof"].replace("-", "")
+    paths = [out / f"eos_survey_boxes_{tag}.png", out / f"eos_survey_boxes_{tag}.pdf"]
+    for pth in paths:
+        fig.savefig(pth, dpi=300 if pth.suffix == ".png" else None, facecolor="white")
+    plt.close(fig)
+    return paths
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--json", type=Path)
@@ -253,6 +345,8 @@ def main():
     for which in ("both", "fall", "spring"):
         for p in build_block(d, args.out, which):
             print(f"  ✓ {p.name}")
+    for p in build_survey_boxes(d, args.out):
+        print(f"  ✓ {p.name}")
 
 
 if __name__ == "__main__":
