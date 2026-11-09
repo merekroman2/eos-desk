@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>End-of-season storage vs Henry Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#ffffff; --ink:#1f2328; --ink-2:#5c6370; --ink-3:#9aa1ab; --rule:#e2e5e9; --grid:#eef0f2; --panel:#ffffff;
+  --orange:#ED7D31; --blue:#0072B2; --green:#009E73; --red:#D62728;
+  --s1:#A5A5A5; --s2:#5B9BD5; --s3:#7BC47F; --s4:#7030A0; --s5:#ED7D31;
+  --t1:#A5A5A5; --t2:#7BC47F; --t3:#5B9BD5; --t4:#F4B183; --t5:#C00000; --t6:#2A9D8F; --s6:#C00000;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  color-scheme: dark;
+  --bg:#141619; --ink:#e8eaed; --ink-2:#aab1ba; --ink-3:#6f7781; --rule:#2a2f36; --grid:#22262c; --panel:#141619;
+  --orange:#F39A5A; --blue:#5FA8E0; --s1:#8a8f96;
+}}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#141619; --ink:#e8eaed; --ink-2:#aab1ba; --ink-3:#6f7781; --rule:#2a2f36; --grid:#22262c; --panel:#141619;
+  --orange:#F39A5A; --blue:#5FA8E0; --s1:#8a8f96;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
+header h1{font-size:28px;line-height:1.2;font-weight:600;margin:0 0 6px;letter-spacing:-0.01em}
+header p{margin:0;color:var(--ink-2);max-width:72ch}
+.asof{margin-top:10px;font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:var(--ink-2)}
+.asof b{color:var(--ink);font-weight:500}
+
+.controls{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:center;padding:18px 0;margin-top:22px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{appearance:none;border:0;background:transparent;color:var(--ink-2);font:inherit;font-weight:500;padding:6px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button:focus-visible,.chk input:focus-visible+span,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.chk{display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--ink-2)}
+.chk input{position:absolute;opacity:0;width:0;height:0}
+.chk .sw{width:12px;height:12px;border-radius:50%;border:2px solid var(--c);background:var(--c);display:inline-block}
+.chk input:not(:checked)+.sw{background:transparent}
+.chk.tri .sw{border-radius:0;width:0;height:0;border:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid var(--c);background:none}
+.chk.tri input:not(:checked)+.sw{opacity:.3}
+.chk.line .sw{width:18px;height:0;border-radius:0;border:0;border-top:2px dotted var(--orange);background:none}
+.chk.line input:not(:checked)+.sw{opacity:.3}
+.chk.dia .sw{transform:rotate(45deg);border-radius:1px;background:var(--red);border-color:var(--red)}
+.group{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.group .lbl{color:var(--ink-3);font-size:13px}
+
+section{padding:26px 0 8px}
+section+section{border-top:1px solid var(--rule)}
+h2{font-size:17px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--ink-2);margin:0 0 14px;max-width:80ch}
+.chart{position:relative;width:100%}
+.chart.tall{height:520px}
+.chart.mid{height:360px}
+.chart.short{height:300px}
+.axis-note{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);margin:4px 2px 0}
+.axis-note .l{color:var(--orange)} .axis-note .r{color:var(--blue)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+@media (max-width:860px){.two{grid-template-columns:1fr}.chart.tall{height:420px}}
+
+.tablewrap{overflow-x:auto;margin-top:16px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{color:var(--ink-2);font-weight:500;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+td.num{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+td.hist{color:var(--ink-3)}
+tr.now td{font-weight:600}
+.delta-up{color:var(--green)} .delta-dn{color:var(--red)}
+
+footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);color:var(--ink-2);font-size:13px}
+footer p{margin:0 0 6px;max-width:90ch}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>End-of-season storage vs Henry Hub</h1>
+  <p>Each week the market revises its estimate of where Lower 48 working gas will end the injection season (31 October) or the withdrawal season (31 March). The scatter puts those estimates against the prompt-month Henry Hub price in the same week. Triangles are EIA’s own estimate from each monthly Short-Term Energy Outlook, priced at the week it was released.</p>
+  <div class="asof" id="asof"></div>
+</header>
+
+<div class="controls">
+  <div class="seg" role="group" aria-label="Season">
+    <button type="button" data-kind="Fall" aria-pressed="true">Fall</button>
+    <button type="button" data-kind="Spring" aria-pressed="false">Spring</button>
+  </div>
+  <div class="group" id="seasonChecks"><span class="lbl">Seasons</span></div>
+  <div class="group">
+    <label class="chk" style="--c:var(--ink-2)"><input type="checkbox" id="showWeekly" checked><span class="sw"></span>Weekly estimates</label>
+    <label class="chk tri" style="--c:var(--ink-2)"><input type="checkbox" id="showSteo" checked><span class="sw"></span>STEO vintages</label>
+    <label class="chk line"><input type="checkbox" id="showTrend" checked><span class="sw"></span>Trendline</label>
+  </div>
+</div>
+
+<section>
+  <h2 id="scatterTitle">Fall EOS vs prompt-month futures</h2>
+  <p class="sub" id="scatterSub"></p>
+  <div class="chart tall"><canvas id="scatter"></canvas></div>
+  <div class="axis-note"><span class="l">x: end-of-season storage estimate, Bcf (Lower 48)</span><span class="r">y: prompt-month Henry Hub, $/MMBtu, week average</span></div>
+</section>
+
+<section>
+  <h2 id="pathTitle">How the estimate and the price moved</h2>
+  <p class="sub">The weekly consensus estimate (bars), EIA’s STEO estimate at each release (triangles), and the prompt-month price (line), on the same calendar.</p>
+  <div class="chart mid"><canvas id="path"></canvas></div>
+  <div class="axis-note"><span class="l">Bcf</span><span class="r">$/MMBtu</span></div>
+  <div class="tablewrap"><table id="vtable"><thead><tr>
+    <th>STEO vintage</th><th>Released</th><th>EOS, Lower 48 (Bcf)</th><th>Change vs prior</th><th>Prompt HH that week</th><th>Weekly estimate that week</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+  <h2>Both seasons on the board</h2>
+  <p class="sub">Weekly estimates for the current fall and the coming spring against the prompt-month price, the two bar panels from the weekly page.</p>
+  <div class="two">
+    <div><div class="chart short"><canvas id="barFall"></canvas></div><div class="axis-note"><span class="l" id="barFallLbl"></span><span class="r">$/MMBtu</span></div></div>
+    <div><div class="chart short"><canvas id="barSpring"></canvas></div><div class="axis-note"><span class="l" id="barSpringLbl"></span><span class="r">$/MMBtu</span></div></div>
+  </div>
+</section>
+
+<footer>
+  <p>Weekly end-of-season estimates: Jozef’s EOS workbook (consensus survey). Prices: weekly Monday–Friday averages of the Yahoo Finance NG=F front-month close and the EIA Henry Hub daily spot (RNGWHHD). STEO: EIA Short-Term Energy Outlook archive workbooks, table 5a, series NGWGPUS less NGWG_AK (Lower 48 end-of-period working gas); October value for fall, March value for spring; release dates by EIA’s published rule. Trendlines are exponential fits on the same history as the weekly page.</p>
+  <p>MR Analytics LLC for Enelyst.</p>
+</footer>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+(function(){
+  if(!DATA){ document.getElementById('asof').textContent='No data was embedded in this page.'; return; }
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmtD = s => { const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); };
+  const fmtM = s => { const [y,m]=s.split('-'); return new Date(+y,+m-1,1).toLocaleDateString('en-US',{month:'short',year:'numeric'}); };
+  const ms = s => new Date(s+'T00:00:00').getTime();
+  const num = (v,d=0) => v==null?'—':v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const PAL = {Fall:['--s1','--s2','--s3','--s4','--s5','--s6'], Spring:['--t1','--t2','--t3','--t4','--t5','--t6']};
+  const XLIM = {Fall:[3200,4200], Spring:[1400,2400]}, YLIM={Fall:[0,14],Spring:[0,7]};
+
+  Chart.defaults.font.family = '"IBM Plex Sans", system-ui, sans-serif';
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = css('--ink-2');
+  Chart.defaults.borderColor = css('--grid');
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.plugins.tooltip.backgroundColor = css('--ink');
+  Chart.defaults.plugins.tooltip.titleColor = css('--bg');
+  Chart.defaults.plugins.tooltip.bodyColor = css('--bg');
+
+  document.getElementById('asof').innerHTML =
+    `Weekly estimates through <b>${fmtD(DATA.asof)}</b> (${DATA.latest_label}) · prices through <b>${fmtD(DATA.prices_through)}</b> · STEO through <b>${fmtM(DATA.steo.reduce((a,r)=>r.vintage>a?r.vintage:a,''))}</b>`;
+
+  const state = {kind:'Fall', seasons:new Set(), weekly:true, steo:true, trend:true};
+  const bySeason = (a,b)=>+a.split(' ')[1]-+b.split(' ')[1];
+  // seasons with weekly estimates (the last five), then any later season EIA already forecasts
+  const weeklySeasons = kind => [...new Set(DATA.weekly.map(r=>r[kind==='Fall'?'fall_season':'spring_season']).filter(Boolean))].sort(bySeason).slice(-5);
+  const steoOnly = kind => { const w=new Set(weeklySeasons(kind)), last=weeklySeasons(kind).slice(-1)[0];
+    return [...new Set(DATA.steo.filter(r=>r.season.startsWith(kind)&&r.is_forecast&&r.hh_fut!=null&&!w.has(r.season)&&bySeason(r.season,last)>0).map(r=>r.season))].sort(bySeason); };
+  const lastFive = kind => [...weeklySeasons(kind), ...steoOnly(kind)];
+
+  // ---- season checkboxes ----
+  const checks = document.getElementById('seasonChecks');
+  function buildChecks(){
+    checks.querySelectorAll('label').forEach(e=>e.remove());
+    const all = lastFive(state.kind), extra=new Set(steoOnly(state.kind)); state.seasons = new Set(all.filter(x=>!extra.has(x)));
+    all.forEach((s,i)=>{
+      const l=document.createElement('label'); l.className='chk'; l.style.setProperty('--c',css(PAL[state.kind][i]));
+      l.innerHTML=`<input type="checkbox" ${extra.has(s)?'':'checked'}><span class="sw"></span>${s.replace(' 20',' ’')}${extra.has(s)?' (STEO only)':''}`;
+      l.querySelector('input').addEventListener('change',e=>{ e.target.checked?state.seasons.add(s):state.seasons.delete(s); drawScatter(); });
+      checks.appendChild(l);
+    });
+  }
+  const colorOf = s => { const i=lastFive(state.kind).indexOf(s); return i<0?css('--ink-3'):css(PAL[state.kind][i]); };
+
+  // ---- scatter ----
+  let scatter;
+  function drawScatter(){
+    const kind=state.kind, key=kind.toLowerCase(), skey=key+'_season';
+    const ds=[];
+    const [a,b]=DATA.trend[kind], [x0,x1]=XLIM[kind];
+    if(state.trend){
+      const pts=[]; for(let x=x0;x<=x1;x+=10) pts.push({x, y:a*Math.exp(b*x)});
+      ds.push({type:'line',data:pts,borderColor:css('--orange'),borderDash:[2,4],borderWidth:1.6,pointRadius:0,order:9,label:'trend'});
+    }
+    const latest=[];
+    lastFive(kind).forEach((s,i)=>{
+      if(!state.seasons.has(s)) return;
+      const col=css(PAL[kind][i]);
+      if(state.weekly){
+        const pts=DATA.weekly.filter(r=>r[skey]===s && r[key]!=null && r.fut!=null).map(r=>({x:r[key],y:r.fut,d:r.date,s}));
+        pts.filter(p=>DATA.weekly.find(r=>r.date===p.d).latest).forEach(p=>latest.push(p));
+        ds.push({type:'scatter',data:pts,backgroundColor:col,pointRadius:4,pointHoverRadius:6,order:5-i,label:s,kind:'weekly'});
+      }
+      if(state.steo){
+        const pts=DATA.steo.filter(r=>r.season===s && r.is_forecast && r.hh_fut!=null).map(r=>({x:r.eos_l48,y:r.hh_fut,v:r.vintage,rel:r.release,s,f:r.is_forecast}));
+        ds.push({type:'scatter',data:pts,backgroundColor:col,borderColor:css('--ink'),borderWidth:1.2,pointStyle:'triangle',pointRadius:8,pointHoverRadius:10,order:1,label:s+' STEO',kind:'steo'});
+      }
+    });
+    if(state.weekly && latest.length)
+      ds.push({type:'scatter',data:latest,backgroundColor:css('--red'),pointStyle:'rectRot',pointRadius:8,pointHoverRadius:10,order:0,label:DATA.latest_label,kind:'latest'});
+
+    const cfg={data:{datasets:ds},options:{responsive:true,maintainAspectRatio:false,animation:false,
+      scales:{x:{type:'linear',min:x0,max:x1,ticks:{callback:v=>num(v)},grid:{color:css('--grid')}},
+              y:{min:YLIM[kind][0],max:YLIM[kind][1],ticks:{color:css('--blue')},grid:{color:css('--grid')}}},
+      plugins:{tooltip:{callbacks:{
+        title:items=>{const p=items[0].raw, d=items[0].dataset; return d.kind==='steo'?`STEO ${fmtM(p.v)} (released ${fmtD(p.rel)})`:(d.kind==='latest'?DATA.latest_label:`Week of ${fmtD(p.d)}`);},
+        label:item=>{const p=item.raw; return [`${p.s}${item.dataset.kind==='steo'&&!p.f?' (historical)':''}`,`EOS ${num(p.x)} Bcf`,`HH ${num(p.y,2)} $/MMBtu`];}}}}}};
+    if(scatter){scatter.data=cfg.data;scatter.options=cfg.options;scatter.update();} else scatter=new Chart(document.getElementById('scatter'),cfg);
+    document.getElementById('scatterTitle').textContent=`${kind} EOS vs prompt-month futures`;
+    const n=DATA.steo.filter(r=>r.season.startsWith(kind)&&r.is_forecast&&r.hh_fut!=null&&state.seasons.has(r.season)).length;
+    document.getElementById('scatterSub').textContent=`Circles: weekly consensus estimates, one per week, coloured by season. Triangles: ${n} STEO releases. Dotted: exponential fit, y = ${a.toExponential(2)}·e^(${b.toFixed(5)}·x).`;
+  }
+
+  // ---- path chart + table (current season of the selected kind) ----
+  let path, barF, barS;
+  function currentSeason(){ const l=weeklySeasons(state.kind); return l[l.length-1]; }
+  function drawPath(){
+    const kind=state.kind, key=kind.toLowerCase(), skey=key+'_season', s=currentSeason();
+    const wk=DATA.weekly.filter(r=>r[skey]===s);
+    const st=DATA.steo.filter(r=>r.season===s && r.is_forecast).sort((a,b)=>a.vintage<b.vintage?-1:1);
+    const start=Math.min(...[wk[0]&&ms(wk[0].date), st[0]&&ms(st[0].release)].filter(Boolean))-14*864e5;
+    const end=Math.max(...[wk.length&&ms(wk[wk.length-1].date), st.length&&ms(st[st.length-1].release)].filter(Boolean))+21*864e5;
+    const px=DATA.weekly.filter(r=>r.fut!=null && ms(r.date)>=start && ms(r.date)<=end);
+    const vals=[...wk.map(r=>r[key]),...st.map(r=>r.eos_l48)].filter(v=>v!=null);
+    const lo=Math.floor(Math.min(...vals)/100)*100-100, hi=Math.ceil(Math.max(...vals)/100)*100+100;
+    const cfg={data:{datasets:[
+      {type:'bar',label:'Weekly estimate',data:wk.filter(r=>r[key]!=null).map(r=>({x:ms(r.date),y:r[key],d:r.date})),backgroundColor:css('--orange'),barThickness:5,yAxisID:'y',order:3},
+      {type:'scatter',label:'STEO',data:st.map(r=>({x:ms(r.release),y:r.eos_l48,v:r.vintage,f:r.is_forecast})),backgroundColor:css('--ink'),borderColor:css('--bg'),borderWidth:1,pointStyle:'triangle',pointRadius:8,pointHoverRadius:10,yAxisID:'y',order:1},
+      {type:'line',label:'Prompt HH',data:px.map(r=>({x:ms(r.date),y:r.fut,d:r.date})),borderColor:css('--blue'),borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y2',order:2}
+    ]},options:{responsive:true,maintainAspectRatio:false,animation:false,
+      scales:{x:{type:'linear',ticks:{callback:v=>new Date(v).toLocaleDateString('en-US',{month:'short',year:'2-digit'}),maxTicksLimit:14},grid:{display:false}},
+              y:{min:lo,max:hi,position:'left',ticks:{color:css('--orange'),callback:v=>num(v)},grid:{color:css('--grid')}},
+              y2:{position:'right',ticks:{color:css('--blue')},grid:{display:false}}},
+      plugins:{tooltip:{callbacks:{
+        title:items=>{const p=items[0].raw; return p.v?`STEO ${fmtM(p.v)}`:`Week of ${fmtD(p.d)}`;},
+        label:item=>`${item.dataset.label}: ${item.dataset.yAxisID==='y2'?num(item.raw.y,2)+' $/MMBtu':num(item.raw.y)+' Bcf'}${item.raw.f===false?' (historical)':''}`}}}}};
+    if(path){path.data=cfg.data;path.options=cfg.options;path.update();} else path=new Chart(document.getElementById('path'),cfg);
+    document.getElementById('pathTitle').textContent=`${s}: how the estimate and the price moved`;
+
+    const tb=document.querySelector('#vtable tbody'); tb.innerHTML='';
+    st.forEach((r,i)=>{
+      const prev=i?st[i-1].eos_l48:null, d=prev==null?null:r.eos_l48-prev;
+      const wkrow=wk.filter(w=>ms(w.date)>=ms(r.release)&&ms(w.date)<ms(r.release)+7*864e5)[0];
+      const tr=document.createElement('tr'); if(i===st.length-1) tr.className='now';
+      tr.innerHTML=`<td>${fmtM(r.vintage)}</td><td class="num">${fmtD(r.release)}</td><td class="num ${r.is_forecast?'':'hist'}">${num(r.eos_l48)}${r.is_forecast?'':' (hist.)'}</td>`+
+        `<td class="num ${d>0?'delta-up':d<0?'delta-dn':''}">${d==null?'—':(d>0?'+':'')+num(d)}</td><td class="num">${num(r.hh_fut,3)}</td><td class="num">${wkrow&&wkrow[key]!=null?num(wkrow[key]):'—'}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+
+  // ---- bar panels ----
+  function drawBars(canvas, season, key, labelEl){
+    const skey=key+'_season';
+    const wk=DATA.weekly.filter(r=>r[skey]===season && r[key]!=null);
+    if(!wk.length) return null;
+    const yr=+season.split(' ')[1];
+    const x0=key==='fall'?new Date(yr-1,10,1):new Date(yr-1,6,1), x1=key==='fall'?new Date(yr,10,1):new Date(yr,3,1);
+    const px=DATA.weekly.filter(r=>r.fut!=null&&ms(r.date)>=x0&&ms(r.date)<=x1);
+    const vals=wk.map(r=>r[key]); const lo=Math.floor(Math.min(...vals)/100)*100, hi=Math.ceil(Math.max(...vals)/100)*100;
+    labelEl.textContent=`EOS ${season}, Bcf`;
+    return new Chart(canvas,{data:{datasets:[
+      {type:'bar',label:'EOS '+season,data:wk.map(r=>({x:ms(r.date),y:r[key],d:r.date})),backgroundColor:css('--orange'),barThickness:4,yAxisID:'y',order:2},
+      {type:'line',label:'Prompt HH',data:px.map(r=>({x:ms(r.date),y:r.fut,d:r.date})),borderColor:css('--blue'),borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y2',order:1}
+    ]},options:{responsive:true,maintainAspectRatio:false,animation:false,
+      scales:{x:{type:'linear',min:+x0,max:+x1,ticks:{callback:v=>new Date(v).toLocaleDateString('en-US',{month:'short',year:'2-digit'}),maxTicksLimit:13},grid:{display:false}},
+              y:{min:lo,max:hi,ticks:{color:css('--orange'),callback:v=>num(v)},grid:{color:css('--grid')}},
+              y2:{position:'right',ticks:{color:css('--blue')},grid:{display:false}}},
+      plugins:{tooltip:{callbacks:{title:items=>`Week of ${fmtD(items[0].raw.d)}`,label:item=>`${item.dataset.label}: ${item.dataset.yAxisID==='y2'?num(item.raw.y,2)+' $/MMBtu':num(item.raw.y)+' Bcf'}`}}}}});
+  }
+
+  // ---- wire up ----
+  document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true');
+    state.kind=b.dataset.kind; buildChecks(); drawScatter(); drawPath();
+  }));
+  [['showWeekly','weekly'],['showSteo','steo'],['showTrend','trend']].forEach(([id,k])=>document.getElementById(id).addEventListener('change',e=>{state[k]=e.target.checked;drawScatter();}));
+
+  buildChecks(); drawScatter(); drawPath();
+  barF=drawBars(document.getElementById('barFall'),`Fall ${DATA.fall_year}`,'fall',document.getElementById('barFallLbl'));
+  barS=drawBars(document.getElementById('barSpring'),`Spring ${DATA.fall_year+1}`,'spring',document.getElementById('barSpringLbl'));
+  if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>location.reload()); }
+})();
+</script>
+</body>
+</html>

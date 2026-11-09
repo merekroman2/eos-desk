@@ -1,0 +1,8 @@
+Data/steo_archive/
+automation/__pycache__/
+.venv/
+.DS_Store
+Presentation/*.png
+Data/EOSw.xlsx
+Presentation/
+Data/eia_prices.csv
