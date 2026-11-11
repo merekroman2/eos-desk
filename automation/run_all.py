@@ -50,6 +50,7 @@ def main():
             extra += ["--" + k.replace("_", "-"), getattr(a, k)]
     run("eos_scatter_presentation.py", "--out", out, *extra)
     run("eos_desk_page.py", "--out", out)
+    run("eos_desk_column.py", "--out", out)      # one-column 1x3 per season, latest week called out
     print(f"\nDone — outputs in {out}")
 
 

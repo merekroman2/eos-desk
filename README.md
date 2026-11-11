@@ -27,6 +27,7 @@ into `Data/steo_archive/`; later runs only fetch the newest release.
 | `fall_eos_vs_hh_<asof>_clean.png`, `spring_…_clean.png` | Same frame, ticks only, for Adobe Express |
 | `eos_desk_<asof>_reference.png` / `_clean.png` | The original six-panel landscape page |
 | `eos_steo_<asof>.html` (+ `eos_steo_latest.html`, `.json`) | Interactive page: scatter with STEO vintages, season timeline, vintage table |
+| `eos_column_fall_<asof>.pdf`, `eos_column_spring_<asof>.pdf` | One Desk column (3.4 × 8.4 in), brand styled: EOS vs HH spot, EOS vs HH futures, EOS vs prompt-futures scatter; latest survey week called out with arrows |
 | `eos_survey_boxes_<asof>.pdf` / `.png` | The two survey summary boxes (average, median, range, count, respondent bars), 7.5 × 2.0 in |
 | `eos_desk_page_<asof>.pdf` | Full-page mock-up of page 4, reference only |
 
@@ -61,6 +62,9 @@ to `run_all.py` for a headline.
 | `steo_eos_page.py` | STEO vintages, data JSON, interactive HTML (template: `steo_eos_template.html`) |
 | `eos_scatter_presentation.py` | fall/spring presentation scatters with computed annotation |
 | `eos_desk_page.py` | The Desk chart block, columns, and full-page mock-up |
+| `eos_desk_column.py` | one-column 1×3 per season in the Desk brand, latest week highlighted |
+| `john_survey.py` | reads John's survey workbook; survey CSVs and survey panels |
+| `desk_style.py` | The Desk brand tokens shared by all charts |
 | `run_all.py` | runs the chain |
 
 Set `MR_HOME=/some/folder` to use a different project root than the repo folder.
