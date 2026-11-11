@@ -8,7 +8,7 @@ run_all.py — the whole weekly chain, one command.
                                  --spring-title "Winter risk is still in the price"
     python automation/run_all.py --skip-prices        # reuse Data/eia_prices.csv as is
 
-Steps: fetch_prices → eos_desk_chart (six-panel PNG) → steo_eos_page (STEO vintages, JSON, HTML)
+Steps: john_survey (if John's workbook is in Data/) → fetch_prices → eos_desk_chart (six-panel PNG) → steo_eos_page (STEO vintages, JSON, HTML)
        → eos_scatter_presentation (fall/spring scatters) → eos_desk_page (InDesign blocks)
 """
 import argparse
@@ -36,6 +36,10 @@ def main():
     ap.add_argument("--fall-subtitle"); ap.add_argument("--spring-subtitle")
     a = ap.parse_args()
     out = str(HOME / "Presentation")
+    if any((HOME / "Data").glob("*fall-spring*.xlsx")):
+        run("john_survey.py", "--out", out)       # survey CSVs + brand-styled survey panels
+    else:
+        print("\n── John's survey workbook not in Data/ — survey boxes will show the average only")
     if not a.skip_prices:
         run("fetch_prices.py")
     run("eos_desk_chart.py", "--workbook", a.workbook, "--out", out)

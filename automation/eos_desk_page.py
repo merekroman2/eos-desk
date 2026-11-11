@@ -35,12 +35,15 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-plt.rcParams["text.parse_math"] = False
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import desk_style as ds  # noqa: E402
+ds.use_desk_fonts()
 # project root: $MR_HOME if set, else the folder above automation/
 HOME = Path(os.environ.get("MR_HOME", Path(__file__).resolve().parent.parent))
 
-ORANGE, BLUE, GREEN, NAVY, RED = "#ED7D31", "#5B9BD5", "#C5E0B4", "#1F3864", "#FF0000"
-GREY, DARK = "#595959", "#1f2328"
+# The Desk brand (desk_style.py): EOS bars and HH line use the chart-* colors; ribbons are desk-green
+ORANGE, BLUE, GREEN, NAVY, RED = ds.CHART_EOS, ds.CHART_HH, ds.DESK_GREEN, ds.DESK_GREEN, ds.SURVEY_RED
+GREY, DARK = ds.MUTED, ds.INK
 PAL = {"Fall": ["#A5A5A5", "#5B9BD5", "#A9D18E", "#7030A0", "#ED7D31"],
        "Spring": ["#A5A5A5", "#A9D18E", "#5B9BD5", "#F4B183", "#C00000"]}
 XLIM = {"Fall": (3200, 4200), "Spring": (1400, 2400)}
@@ -160,9 +163,9 @@ def survey_box(fig, x, y, wd, ht, w, kind, season, asof, home=HOME):
     ix, iy = lambda v: v / fw, lambda v: v / fh          # inches -> figure fraction
     stats = survey_stats(season, home)
     g = w[(w[key + "_season"] == season) & w[key].notna()].sort_values("date")
-    fig.patches.append(Rectangle((x, y), wd, ht, transform=fig.transFigure, fc="white", ec=NAVY, lw=1, zorder=-2))
+    fig.patches.append(Rectangle((x, y), wd, ht, transform=fig.transFigure, fc="white", ec=ds.DESK_GREEN, lw=1.4, zorder=-2))
     fig.patches.append(Rectangle((x, y + ht - iy(0.2)), wd, iy(0.2), transform=fig.transFigure, fc=NAVY, ec="none", zorder=-1))
-    fig.text(x + wd / 2, y + ht - iy(0.1), f"EOS Weekly NG Storage Survey for {season}", color="white",
+    fig.text(x + wd / 2, y + ht - iy(0.1), f"EOS Weekly NG Storage Survey for {season}".upper(), color=ds.INK,
              fontsize=8.5, fontweight="bold", ha="center", va="center")
     c1, c2, c3, c4 = x + ix(0.15), x + wd * 0.45, x + wd * 0.65, x + wd * 0.85
     r0 = y + ht - iy(0.42)
@@ -212,7 +215,7 @@ def survey_box(fig, x, y, wd, ht, w, kind, season, asof, home=HOME):
             v = cur["values"]
             lo = np.floor((v.min() - 150) / 200) * 200
             hi = np.ceil((v.max() + 150) / 200) * 200
-            ax.bar(range(len(v)), v - lo, bottom=lo, color="#A9D18E", width=0.8)
+            ax.bar(range(len(v)), v - lo, bottom=lo, color=ds.DESK_GREEN, width=0.8)
             ax.axhline(cur["avg"], color=RED, ls=(0, (1, 2)), lw=1)
             ax.text(len(v) + 0.2, cur["avg"], f"{fmt(cur['avg'])}", color=DARK, fontsize=5.5, va="bottom")
             for i, val in enumerate(v):
@@ -242,17 +245,16 @@ def build(d: dict, out: Path) -> list[Path]:
     # page header
     fig.text(0.06, 0.967, "4", fontsize=16, color=GREY, fontfamily="serif")
     fig.text(0.085, 0.967, "THE DESK", fontsize=11, color=GREY, fontfamily="serif", va="baseline")
-    fig.add_artist(plt.Line2D([0.20, 0.94], [0.969, 0.969], color="#7DB46C", lw=1.5))
-    fig.patches.append(Rectangle((0.06, 0.885), 0.88, 0.07, transform=fig.transFigure, fc=GREEN, ec="none"))
-    fig.text(0.50, 0.92, "Nat Gas EOS Surveys +", fontsize=22, color="white", ha="center", va="center",
-             fontfamily="monospace")
+    fig.add_artist(plt.Line2D([0.20, 0.94], [0.969, 0.969], color=ds.DESK_GREEN, lw=1))
+    fig.patches.append(Rectangle((0.06, 0.885), 0.88, 0.07, transform=fig.transFigure, fc=ds.DESK_GREEN_TINT, ec="none"))
+    fig.text(0.50, 0.92, "nat gas EOS survey +", fontsize=22, color=ds.INK, ha="center", va="center",
+             fontfamily=["Courier Prime", "Courier New", "Liberation Mono", "monospace"])
     # survey boxes
     survey_box(fig, 0.06, 0.69, 0.43, 0.185, w, "Fall", fall, asof)
     survey_box(fig, 0.51, 0.69, 0.43, 0.185, w, "Spring", spring, asof)
     # banners
-    for x, txt, c in ((0.06, fall.upper(), ORANGE), (0.51, spring.upper(), GREEN)):
-        fig.patches.append(Rectangle((x, 0.664), 0.43, 0.016, transform=fig.transFigure, fc=c, ec="none"))
-        fig.text(x + 0.215, 0.672, txt, color="white", fontsize=9, fontweight="bold", va="center", ha="center")
+    for x, txt in ((0.06, fall), (0.51, spring)):
+        ds.ribbon(fig, x, 0.664, 0.43, 0.016, txt, fontsize=9)
 
     gs = fig.add_gridspec(3, 2, left=0.10, right=0.92, top=0.64, bottom=0.062, hspace=0.62, wspace=0.42,
                           height_ratios=[1, 1, 1.25])
@@ -289,13 +291,12 @@ def build_block(d: dict, out: Path, which: str = "both") -> list[Path]:
     fig = plt.figure(figsize=(7.5 if ncol == 2 else 3.65, 7.6), facecolor="white")
     colw = 0.95 / ncol if ncol == 2 else 0.9
     gs = fig.add_gridspec(3, ncol, left=0.10 if ncol == 1 else 0.075, right=0.90 if ncol == 1 else 0.945,
-                          top=0.925, bottom=0.075, hspace=0.62, wspace=0.42, height_ratios=[1, 1, 1.25])
+                          top=0.912, bottom=0.075, hspace=0.62, wspace=0.42, height_ratios=[1, 1, 1.25])
     for j, k in enumerate(keys):
         kind, season, colour = cols[k]
         x0 = (0.02 + j * 0.495) if ncol == 2 else 0.02
         wd = 0.465 if ncol == 2 else 0.96
-        fig.patches.append(Rectangle((x0, 0.965), wd, 0.025, transform=fig.transFigure, fc=colour, ec="none"))
-        fig.text(x0 + wd / 2, 0.9775, season.upper(), color="white", fontsize=9, fontweight="bold", va="center", ha="center")
+        ds.ribbon(fig, x0, 0.965, wd, 0.025, season, fontsize=9)
         bars(fig.add_subplot(gs[0, j]), w, kind, "spot", season, fy)
         bars(fig.add_subplot(gs[1, j]), w, kind, "fut", season, fy)
         scatter(fig.add_subplot(gs[2, j]), w, st, kind, d["trend"][kind], d["latest_label"])

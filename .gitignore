@@ -6,3 +6,6 @@ Presentation/*.png
 Data/EOSw.xlsx
 Presentation/
 Data/eia_prices.csv
+Data/*fall-spring*.xlsx
+Data/eos_survey_responses.csv
+Data/eos_survey_weekly.csv

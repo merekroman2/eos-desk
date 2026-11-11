@@ -65,16 +65,25 @@ to `run_all.py` for a headline.
 
 Set `MR_HOME=/some/folder` to use a different project root than the repo folder.
 
-## Survey boxes (median, range, count, respondent bars)
+## Survey boxes and John's survey panels
 
-These need the individual survey responses, which the EOS workbook does not contain. The scripts read
-two small files in `Data/` and fall back to average-only boxes when they are absent:
+John's survey workbook (`New-fall-spring-<year> <date>.xlsx`, one sheet per season named F<year> / S<year>)
+goes in `Data/`. `automation/john_survey.py` reads every respondent estimate for every week, plus his storage
+level rows and last-year EOS, and writes:
 
-- `eos_survey_responses.csv` — one row per estimate: `survey_date, season, estimate_bcf` (names not needed)
-- `eos_survey_summary.csv` — one row per week when only the summary is known:
-  `survey_date, season, average, median, low, high, n_estimates`
+- `Data/eos_survey_responses.csv` — `survey_date, season, rid, estimate_bcf` (respondent names are not copied)
+- `Data/eos_survey_weekly.csv` — n, average, median, low, high, current / last-year / 5-year storage per week
+- `Presentation/eos_survey_panel_fall_<date>.pdf` and `..._spring_...` — John's survey panel (stats, estimates
+  highest to lowest with the average, storage levels, weekly results vs last-year EOS), one Desk column wide
 
-The sample rows are transcribed from John's 9 Nov 2026 email (20 estimates, average 3,906, median 3,901,
-range 3,876–3,945) and reproduce his figures exactly. Going forward the file should come from the survey
-sheet itself, not from a screenshot. Output: `eos_survey_boxes_<asof>.pdf` (7.5 × 2.0 in, both seasons)
-for placing above the chart block, and the boxes on the full-page mock-up.
+Checked against John's 9 Nov 2026 email: Fall 3,906 / 3,901 / 3,876–3,945 / 20; Spring 2,012 / 1,990 /
+1,757–2,388 / 21. The storage-level rows are typed by hand in each season sheet; the script warns when the fall
+and spring sheets disagree for the same week. The workbook and the CSVs derived from it are John's data and are
+git-ignored. Without the workbook the survey boxes fall back to the weekly average only.
+
+## Styling
+
+All Desk charts use `automation/desk_style.py`: The Desk brand tokens (desk-green ribbons #6DB253, tint
+#C5E0BA, ink #231F20) and the chart colors (EOS bars #EE7C2D, Henry Hub line #5E9AD1), Arial, white ground,
+one column = 3.4 in at 300 dpi. The chart colors were sampled from a placed image and are still to be
+confirmed against John's InDesign swatches.
