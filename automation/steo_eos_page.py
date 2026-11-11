@@ -103,6 +103,46 @@ def steo_vintages(start: tuple[int, int], cache: Path) -> pd.DataFrame:
     return v
 
 
+def extend_with_john(rows: list[dict], latest_label: str, john_csv: Path):
+    """Fill weeks that Jozef's EOSw.xlsx hasn't reached yet with John's survey averages.
+
+    John names a survey by its Monday; Jozef's row for the same survey is the Friday before
+    (they agree within a few Bcf on every overlapping week). Jozef's value wins where both exist;
+    John's average is used only for weeks Jozef's file doesn't have. The latest marker moves to
+    the newest week either source has. Prices for added weeks come from eia_prices.csv.
+    """
+    if not john_csv.exists():
+        return rows, latest_label
+    j = pd.read_csv(john_csv, parse_dates=["survey_date"])
+    j = j[j["n"] > 0]
+    if j.empty:
+        return rows, latest_label
+    by_date = {r["date"]: r for r in rows}
+    added = 0
+    for _, r in j.iterrows():
+        fri = (r["survey_date"] - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+        key = "fall" if r["season"].startswith("Fall") else "spring"
+        row = by_date.get(fri)
+        if row is None:
+            row = {"date": fri, "spot": None, "fut": None, "fall": None, "spring": None,
+                   "fall_season": None, "spring_season": None, "latest": False}
+            rows.append(row)
+            by_date[fri] = row
+        if row[key] is None:
+            row[key] = round(float(r["average"]), 1)
+            row[key + "_season"] = r["season"]
+            added += 1
+    if added:
+        newest = j["survey_date"].max()
+        nf = (newest - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+        for row in rows:
+            row["latest"] = row["date"] == nf
+        latest_label = "EOS " + newest.strftime("%m/%d/%y")
+        print(f"  + {added} survey weeks from John's workbook; latest survey {newest.date()}")
+    rows.sort(key=lambda r: r["date"])
+    return rows, latest_label
+
+
 # ---------------------------------------------------------------------------
 # Assemble the data the page needs
 # ---------------------------------------------------------------------------
@@ -132,6 +172,15 @@ def build_data(workbook: Path, prices: Path, cache: Path) -> dict:
             "latest": bool(pd.notna(r["latest_fall"]) or pd.notna(r["latest_spring"])),
         })
 
+    rows, latest_label = extend_with_john(rows, latest_label, HOME / "Data" / "eos_survey_weekly.csv")
+    for row in rows:                    # prices for any week added above
+        t = pd.Timestamp(row["date"])
+        if t in weekly.index:
+            if row["fut"] is None and pd.notna(weekly.at[t, "futures"]):
+                row["fut"] = round(float(weekly.at[t, "futures"]), 3)
+            if row["spot"] is None and pd.notna(weekly.at[t, "spot"]):
+                row["spot"] = round(float(weekly.at[t, "spot"]), 3)
+
     # trendlines exactly as the PNG page: all fall history; spring = the three seasons
     # before the current two (Jozef's N46:N199 range)
     fall_year = max(int(s.split()[1]) for s in season_cols if s.startswith("Fall"))
@@ -149,12 +198,13 @@ def build_data(workbook: Path, prices: Path, cache: Path) -> dict:
     v["hh_spot"] = weekly["spot"].reindex(wk_end).round(3).to_numpy()
     v = v.replace({np.nan: None})
 
-    asof = df.loc[df["latest_fall"].notna(), "date"].max()
+    latest_rows = [r["date"] for r in rows if r["latest"]]
+    asof = pd.Timestamp(max(latest_rows)) if latest_rows else df.loc[df["latest_fall"].notna(), "date"].max()
     return {
         "asof": asof.strftime("%Y-%m-%d"),
         "latest_label": latest_label,
         "fall_year": fall_year,
-        "prices_through": df.loc[df["futures"].notna(), "date"].max().strftime("%Y-%m-%d"),
+        "prices_through": max(r["date"] for r in rows if r["fut"] is not None),
         "trend": {"Fall": [fa, fb], "Spring": [sa, sb]},
         "weekly": rows,
         "steo": v.to_dict(orient="records"),

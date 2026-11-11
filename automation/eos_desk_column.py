@@ -78,22 +78,25 @@ def bars(ax, w, kind, pcol, season, fall_year, latest_date, lab):
     key = kind.lower()
     g = w[(w[key + "_season"] == season) & w[key].notna()]
     yr = fall_year if kind == "Fall" else fall_year + 1
-    x0, x1 = (pd.Timestamp(yr - 1, 11, 1), pd.Timestamp(yr, 11, 1)) if kind == "Fall" else \
-             (pd.Timestamp(yr - 1, 7, 1), pd.Timestamp(yr, 4, 1))
+    # season window plus two weeks, so the last surveys (dated the Friday before) stay on the chart
+    x0, x1 = (pd.Timestamp(yr - 1, 11, 1), pd.Timestamp(yr, 11, 15)) if kind == "Fall" else \
+             (pd.Timestamp(yr - 1, 7, 1), pd.Timestamp(yr, 4, 15))
     lo, hi = BAR_YLIM[kind]
     lo = min(lo, np.floor(g[key].min() / 100) * 100)
+    hi = max(hi, np.ceil((g[key].max() + 0.35 * (g[key].max() - lo)) / 100) * 100)   # room for the label
     ax.bar(g["date"], g[key] - lo, bottom=lo, width=4.2, color=ds.CHART_EOS, zorder=2)
     last = g[g["date"] == latest_date]
     if len(last):                      # latest week: ink outline + arrowed label
         r = last.iloc[0]
         ax.bar([r["date"]], [r[key] - lo], bottom=lo, width=4.2, color=ds.CHART_EOS, edgecolor=ds.INK,
                lw=1.1, zorder=4)
-        ax.annotate(f"{lab}\n{r[key]:,.0f} Bcf",
-                    xy=(r["date"], r[key]), xytext=(-34, 14), textcoords="offset points",
-                    fontsize=6, fontweight="bold", color=ds.INK, ha="right", va="center",
+        ax.annotate(f"{lab}: {r[key]:,.0f} Bcf",
+                    xy=(r["date"], r[key]), xytext=(r["date"] - pd.Timedelta(days=12), hi - 0.04 * (hi - lo)),
+                    textcoords="data", fontsize=6, fontweight="bold", color=ds.INK, ha="right", va="top",
                     bbox=dict(boxstyle="square,pad=0.15", fc=ds.PAPER, ec="none"),
                     arrowprops=dict(arrowstyle="-|>", color=ds.INK, lw=0.8, mutation_scale=6,
-                                    shrinkA=1, shrinkB=1), zorder=6)
+                                    shrinkA=1, shrinkB=1, connectionstyle="angle,angleA=0,angleB=90,rad=0"),
+                    zorder=6)
     _frame(ax)
     ax.set_xlim(x0, x1)
     ax.set_ylim(lo, hi)
@@ -148,7 +151,7 @@ def scatter(ax, w, st, kind, trend, latest_date, lab):
         x0, x1 = XLIM[kind]
         y0, y1 = YLIM[kind]
         ax.annotate(f"{lab}\n{r[key]:,.0f} Bcf at ${r['fut']:.2f}",
-                    xy=(r[key], r["fut"]), xytext=(x0 + 0.62 * (x1 - x0), y0 + 0.62 * (y1 - y0)),
+                    xy=(r[key], r["fut"]), xytext=(x0 + 0.60 * (x1 - x0), y0 + 0.52 * (y1 - y0)),
                     fontsize=6.3, fontweight="bold", color=LATEST, ha="center", va="bottom",
                     bbox=dict(boxstyle="square,pad=0.2", fc=ds.PAPER, ec="none"),
                     arrowprops=dict(arrowstyle="-|>", color=LATEST, lw=0.9, mutation_scale=7,
@@ -161,9 +164,10 @@ def scatter(ax, w, st, kind, trend, latest_date, lab):
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}"))
     ax.set_xlabel(f"{kind} EOS estimate (Bcf)", fontsize=6, color=ds.MUTED, labelpad=2)
     ax.set_ylabel("Prompt HH ($/MMBtu)", fontsize=6, color=ds.MUTED, labelpad=2)
-    _title(ax, f"{kind} EOS vs prompt-month futures", 22)
-    ax.legend(handles=handles, loc="lower left", bbox_to_anchor=(-0.02, 1.0), ncol=4, fontsize=5.2,
-              frameon=False, handletextpad=0.2, columnspacing=0.7, borderaxespad=0.1)
+    _title(ax, f"{kind} EOS vs prompt-month futures", 5)
+    ax.legend(handles=handles, loc="upper right", ncol=2, fontsize=5.2, frameon=True, facecolor=ds.PAPER,
+              edgecolor=ds.GRID, framealpha=1, handletextpad=0.2, columnspacing=0.8, borderaxespad=0.4,
+              borderpad=0.4)
 
 
 def build(d: dict, out: Path, which: str) -> list[Path]:
@@ -183,7 +187,7 @@ def build(d: dict, out: Path, which: str) -> list[Path]:
     left, right = 0.38 / W, 1 - 0.36 / W
     axes = [fig.add_axes([left, (H - 2.30) / H, right - left, 1.55 / H]),
             fig.add_axes([left, (H - 4.55) / H, right - left, 1.55 / H]),
-            fig.add_axes([left, 0.62 / H, right - left, 2.50 / H])]
+            fig.add_axes([left, 0.62 / H, right - left, 2.80 / H])]
     lab = survey_label(d, latest)
     bars(axes[0], w, kind, "spot", season, fy, latest, lab)
     bars(axes[1], w, kind, "fut", season, fy, latest, lab)
